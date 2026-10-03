@@ -3,8 +3,8 @@ import starlight from '@astrojs/starlight';
 import react from '@astrojs/react';
 
 export default defineConfig({
-  // إذا كان اسم مستودعك مختلفاً عن surgical-board-suite غيّر المسار هنا
-  base: '/surgical-board-suite',
+  site: 'https://evojan34.github.io',
+  base: '/Surgeon',
   integrations: [
     starlight({
       title: 'Board Surgery Suite | Bailey & Love 28th',
@@ -33,4 +33,3 @@ export default defineConfig({
     react(),
   ],
 });
-
