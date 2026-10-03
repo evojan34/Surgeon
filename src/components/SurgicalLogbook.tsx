@@ -86,7 +86,7 @@ export default function SurgicalLogbook() {
           <div style={{ fontSize: '1.8rem', fontWeight: 700 }}>{emergencyOps}</div>
         </div>
         <div style={{ background: '#b45309', color: '#fff', padding: '1rem', borderRadius: '8px', textAlign: 'center' }}>
-          <div style={{ fontSize: '0.85rem', opacity: 0.85 }}>مضاعفات (Clavien > 0)</div>
+          <div style={{ fontSize: '0.85rem', opacity: 0.85 }}>مضاعفات (Clavien &gt; 0)</div>
           <div style={{ fontSize: '1.8rem', fontWeight: 700 }}>{morbidityCount}</div>
         </div>
       </div>
@@ -171,4 +171,3 @@ export default function SurgicalLogbook() {
     </div>
   );
 }
-
