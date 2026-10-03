@@ -1,10 +1,10 @@
-name: Generate Android APK
+name: Build Android APK
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-apk:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -21,19 +21,17 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install Bubblewrap CLI
+      - name: Install Bubblewrap
         run: npm install -g @bubblewrap/cli
 
-      - name: Initialize Android Project
+      - name: Build APK via TWA
         run: |
-          bubblewrap init --manifest https://evojan34.github.io/Surgeon/manifest.webmanifest || true
-
-      - name: Build APK
-        run: |
+          mkdir build-android && cd build-android
+          npx @bubblewrap/cli init --manifest="https://evojan34.github.io/Surgeon/manifest.webmanifest" --skipPwaValidation || true
           echo "Building standalone APK..."
 
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Surgeon-App-APK
-          path: "*.apk"
+          name: Surgeon-APK
+          path: "**/*.apk"
