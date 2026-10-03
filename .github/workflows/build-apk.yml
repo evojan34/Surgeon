@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-android:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Java
+      - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
@@ -21,17 +21,39 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install Bubblewrap
-        run: npm install -g @bubblewrap/cli
-
-      - name: Build APK via TWA
+      - name: Install dependencies & Build
         run: |
-          mkdir build-android && cd build-android
-          npx @bubblewrap/cli init --manifest="https://evojan34.github.io/Surgeon/manifest.webmanifest" --skipPwaValidation || true
-          echo "Building standalone APK..."
+          npm install
+          npm run build
 
-      - name: Upload APK
+      - name: Setup Capacitor for Android
+        run: |
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          cat << 'EOF' > capacitor.config.json
+          {
+            "appId": "com.evojan34.surgeon",
+            "appName": "Surgeon",
+            "webDir": "dist",
+            "server": {
+              "url": "https://evojan34.github.io/Surgeon/",
+              "cleartext": true
+            }
+          }
+          EOF
+          npx cap add android
+
+      - name: Compile Standalone APK with Gradle
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Prepare APK File
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk ./Surgeon.apk
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Surgeon-APK
-          path: "**/*.apk"
+          name: Surgeon-App-APK
+          path: Surgeon.apk
