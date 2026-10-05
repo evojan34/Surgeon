@@ -18,7 +18,7 @@ export default function SurgicalLogbook() {
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
   const [showToast, setShowToast] = useState(false);
 
-  // حقول الـ Wizard
+  // حقول معالج تسجيل العملية (Wizard)
   const [opName, setOpName] = useState('');
   const [opSpecialty, setOpSpecialty] = useState<Operation['specialty']>('HPB');
   const [opRole, setOpRole] = useState<Operation['role']>('Surgeon');
@@ -29,11 +29,11 @@ export default function SurgicalLogbook() {
   // فلترة السجل
   const [selectedFilter, setSelectedFilter] = useState('ALL');
 
-  // بنك الأسئلة السريع
+  // بنك الأسئلة التفاعلي (MCQ)
   const [showMCQ, setShowMCQ] = useState(false);
   const [mcqAnswer, setMcqAnswer] = useState<number | null>(null);
 
-  // قائمة العمليات
+  // قائمة العمليات الافتراضية
   const [operations, setOperations] = useState<Operation[]>([
     {
       id: '1',
@@ -43,7 +43,7 @@ export default function SurgicalLogbook() {
       urgency: 'Elective',
       outcome: 'Uneventful',
       date: '2026-10-05',
-      pearl: 'Critical View of Safety (Strasberg) must be confirmed prior to clipping.'
+      pearl: 'Critical View of Safety (Strasberg) must be confirmed prior to cystic duct clipping.'
     },
     {
       id: '2',
@@ -53,7 +53,7 @@ export default function SurgicalLogbook() {
       urgency: 'Emergency',
       outcome: 'Uneventful',
       date: '2026-10-04',
-      pearl: 'Mobilize the spleen medially by dividing the splenorenal ligament.'
+      pearl: 'Immediate packing of 4 quadrants; mobilize spleen medially by dividing splenorenal ligament.'
     },
     {
       id: '3',
@@ -63,7 +63,7 @@ export default function SurgicalLogbook() {
       urgency: 'Elective',
       outcome: 'Complication',
       date: '2026-10-02',
-      pearl: 'High ligation of ileocolic pedicle with careful ureteric preservation.'
+      pearl: 'High ligation of ileocolic vessels; ensure strict ureteric preservation.'
     }
   ]);
 
