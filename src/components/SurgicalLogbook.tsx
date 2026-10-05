@@ -12,25 +12,13 @@ interface Operation {
   pearl?: string;
 }
 
-interface CurriculumModule {
-  id: string;
-  title: string;
-  enTitle: string;
-  progress: number;
-  completed: number;
-  total: number;
-  statusColor: string;
-}
-
-export default function SurgicalSuite() {
-  // حالة الملاحة الرئيسية
+export default function SurgicalLogbook() {
   const [activeTab, setActiveTab] = useState<'home' | 'logbook' | 'curriculum' | 'review' | 'analytics'>('home');
   const [showWizard, setShowWizard] = useState(false);
-  const [selectedTopic, setSelectedTopic] = useState<CurriculumModule | null>(null);
-  const [showMCQModal, setShowMCQModal] = useState(false);
-
-  // حالة نموذج التسجيل (Wizard)
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
+  const [showToast, setShowToast] = useState(false);
+
+  // حقول الـ Wizard
   const [opName, setOpName] = useState('');
   const [opSpecialty, setOpSpecialty] = useState<Operation['specialty']>('HPB');
   const [opRole, setOpRole] = useState<Operation['role']>('Surgeon');
@@ -38,14 +26,14 @@ export default function SurgicalSuite() {
   const [opOutcome, setOpOutcome] = useState<Operation['outcome']>('Uneventful');
   const [opPearl, setOpPearl] = useState('');
 
-  // بنك الأسئلة والمراجعة
-  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
-  const [isAnswerSubmitted, setIsAnswerSubmitted] = useState(false);
+  // فلترة السجل
+  const [selectedFilter, setSelectedFilter] = useState('ALL');
 
-  // فلتر سجل العمليات
-  const [logFilter, setLogFilter] = useState<string>('ALL');
+  // بنك الأسئلة السريع
+  const [showMCQ, setShowMCQ] = useState(false);
+  const [mcqAnswer, setMcqAnswer] = useState<number | null>(null);
 
-  // البيانات التأسيسية
+  // قائمة العمليات
   const [operations, setOperations] = useState<Operation[]>([
     {
       id: '1',
@@ -55,7 +43,7 @@ export default function SurgicalSuite() {
       urgency: 'Elective',
       outcome: 'Uneventful',
       date: '2026-10-05',
-      pearl: 'Critical View of Safety (Strasberg) must be confirmed prior to cystic duct clipping.'
+      pearl: 'Critical View of Safety (Strasberg) must be confirmed prior to clipping.'
     },
     {
       id: '2',
@@ -65,7 +53,7 @@ export default function SurgicalSuite() {
       urgency: 'Emergency',
       outcome: 'Uneventful',
       date: '2026-10-04',
-      pearl: 'Immediate packing of 4 quadrants; mobilize spleen medially by dividing splenorenal ligament.'
+      pearl: 'Mobilize the spleen medially by dividing the splenorenal ligament.'
     },
     {
       id: '3',
@@ -75,344 +63,277 @@ export default function SurgicalSuite() {
       urgency: 'Elective',
       outcome: 'Complication',
       date: '2026-10-02',
-      pearl: 'High ligation of ileocolic vessels; ensure adequate ureter identification.'
+      pearl: 'High ligation of ileocolic pedicle with careful ureteric preservation.'
     }
   ]);
 
-  const curriculumModules: CurriculumModule[] = [
-    { id: '1', title: 'المبادئ العامة في الجراحة', enTitle: 'General Surgical Principles', progress: 100, completed: 5, total: 5, statusColor: 'from-emerald-500 to-teal-500' },
-    { id: '2', title: 'إصابات الحوادث والإنقاذ', enTitle: 'Trauma & Damage Control (ATLS)', progress: 60, completed: 3, total: 5, statusColor: 'from-sky-500 to-blue-600' },
-    { id: '3', title: 'الكبد، المرارة والبنكرياس', enTitle: 'HPB & Biliary Surgery', progress: 45, completed: 2, total: 5, statusColor: 'from-amber-500 to-orange-600' },
-    { id: '4', title: 'القولون والمستقيم والشرج', enTitle: 'Colorectal & Anorectal', progress: 0, completed: 0, total: 7, statusColor: 'from-slate-600 to-slate-700' }
-  ];
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('surgery_suite_cases');
+      if (saved) setOperations(JSON.parse(saved));
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
 
-  const quickProcedures = [
-    'Laparoscopic Appendectomy',
-    'Laparoscopic Cholecystectomy',
-    'Hernia Repair (Lichtenstein)',
-    'Thyroidectomy',
-    'Whipple Procedure',
-    'Right Hemicolectomy'
-  ];
-
-  // حفظ العملية الجديدة من الـ Wizard
   const handleSaveOperation = () => {
-    if (!opName) return;
+    if (!opName.trim()) return;
     const newOp: Operation = {
       id: Date.now().toString(),
-      name: opName,
+      name: opName.trim(),
       specialty: opSpecialty,
       role: opRole,
       urgency: opUrgency,
       outcome: opOutcome,
       date: new Date().toISOString().split('T')[0],
-      pearl: opPearl
+      pearl: opPearl.trim()
     };
-    setOperations([newOp, ...operations]);
-    setShowWizard(false);
-    setWizardStep(1);
+    const updated = [newOp, ...operations];
+    setOperations(updated);
+    try {
+      localStorage.setItem('surgery_suite_cases', JSON.stringify(updated));
+    } catch (e) {
+      console.error(e);
+    }
+
     setOpName('');
     setOpPearl('');
+    setShowWizard(false);
+    setWizardStep(1);
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
   };
 
-  const filteredOperations = operations.filter(op => {
-    if (logFilter === 'ALL') return true;
-    return op.specialty === logFilter;
+  const filteredOps = operations.filter(op => {
+    if (selectedFilter === 'ALL') return true;
+    return op.specialty === selectedFilter;
   });
 
   return (
-    <div dir="rtl" className="min-h-screen bg-[#0A0E1A] text-slate-100 font-sans pb-24 selection:bg-sky-500/30">
+    <div dir="rtl" className="surgery-app-root">
       
-      {/* ========================================================================= */}
-      {/* 1. TOP STATUS BAR                                                        */}
-      {/* ========================================================================= */}
-      <header className="sticky top-0 z-30 bg-[#0A0E1A]/85 backdrop-blur-xl border-b border-slate-800/80 px-4 py-3">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 p-0.5 shadow-md shadow-sky-500/20">
-              <div className="w-full h-full bg-[#0E1526] rounded-[14px] flex items-center justify-center font-bold text-sky-400 text-sm">
-                د.إ
-              </div>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-sm font-bold text-white tracking-wide">د. إيفان</h1>
-                <span className="text-[10px] font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2 py-0.5 rounded-full">
-                  Year 2 Resident
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400">Surgery Suite • Bailey & Love 28th</p>
-            </div>
-          </div>
+      {/* Toast Alert */}
+      {showToast && (
+        <div className="toast-box">
+          ✓ تم تدوين العملية بنجاح في سجلك المعتمد
+        </div>
+      )}
 
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full text-amber-400 text-xs font-bold">
-              <span>🔥</span>
-              <span>12 يوم</span>
+      {/* ======================= TOP APP BAR ======================= */}
+      <header className="app-header">
+        <div className="user-info">
+          <div className="user-avatar">د.إ</div>
+          <div>
+            <div className="user-name">
+              <span>مرحبًا د. إيفان 👋</span>
+              <span className="badge-resident">Year 2 Resident</span>
             </div>
+            <p className="user-subtitle">استمر في التقدم، أنت أقرب لهدفك اليوم.</p>
           </div>
+        </div>
+        <div className="streak-badge">
+          <span>🔥</span>
+          <span>12 يوم</span>
         </div>
       </header>
 
-      {/* Main Container */}
-      <main className="max-w-2xl mx-auto px-4 pt-4">
+      {/* ======================= MAIN CONTENT TABS ======================= */}
+      <main className="app-main-content">
 
-        {/* ========================================================================= */}
-        {/* 2. TAB: HOME DASHBOARD                                                    */}
-        {/* ========================================================================= */}
+        {/* 1. HOME DASHBOARD */}
         {activeTab === 'home' && (
-          <div className="space-y-5 animate-fadeIn">
-            {/* الترحيب */}
-            <div>
-              <h2 className="text-xl font-extrabold text-white">مرحبًا د. إيفان 👋</h2>
-              <p className="text-xs text-slate-400 mt-0.5">استمر في التقدم، أنت أقرب لهدفك اليوم.</p>
+          <div className="tab-pane">
+            
+            {/* HERO CARD: Year 2 Bailey & Love */}
+            <div className="hero-progress-card">
+              <div className="hero-info">
+                <span className="hero-kicker">المنهج التدريبي للجراحة العامة</span>
+                <h2 className="hero-title">Year 2 — Bailey & Love 28th</h2>
+                <div className="hero-stats">
+                  <strong>204 / 300</strong> قسم مكتمل
+                </div>
+              </div>
+              <div className="ring-container">
+                <svg className="progress-ring" viewBox="0 0 36 36">
+                  <path
+                    className="ring-bg"
+                    strokeWidth="3.8"
+                    stroke="currentColor"
+                    fill="none"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  />
+                  <path
+                    className="ring-fill"
+                    strokeDasharray="68, 100"
+                    strokeLinecap="round"
+                    strokeWidth="3.8"
+                    stroke="currentColor"
+                    fill="none"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  />
+                </svg>
+                <span className="ring-text">68%</span>
+              </div>
             </div>
 
-            {/* بطاقة المنهج الكبرى (Year 2 Hero) */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-[#121B33] via-[#0E162A] to-[#141829] border border-sky-500/20 rounded-3xl p-5 shadow-2xl">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1.5">
-                  <span className="text-[11px] font-bold tracking-wider text-sky-400 uppercase">الخطة الدراسية السريرية</span>
-                  <h3 className="text-lg font-black text-white">Year 2 — Bailey & Love 28th</h3>
-                  <div className="flex items-center gap-2 pt-1 text-xs text-slate-300">
-                    <span className="font-semibold text-white">204 / 300</span>
-                    <span className="text-slate-400">قسم مكتمل</span>
-                  </div>
+            {/* 3 STATS CARDS */}
+            <div className="stats-row">
+              <div className="mini-stat-card" onClick={() => setActiveTab('logbook')}>
+                <div className="mini-stat-header">
+                  <span className="mini-stat-title">🔪 العمليات</span>
+                  <span className="dot dot-blue"></span>
                 </div>
-
-                {/* Progress Ring */}
-                <div className="relative w-20 h-20 flex items-center justify-center">
-                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                    <path
-                      className="text-slate-800"
-                      strokeWidth="3.5"
-                      stroke="currentColor"
-                      fill="none"
-                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    />
-                    <path
-                      className="text-sky-400 transition-all duration-1000 ease-out"
-                      strokeDasharray="68, 100"
-                      strokeLinecap="round"
-                      strokeWidth="3.5"
-                      stroke="currentColor"
-                      fill="none"
-                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    />
-                  </svg>
-                  <span className="absolute text-sm font-black text-white">68%</span>
+                <div className="mini-stat-val">71 عملية</div>
+                <div className="mini-stat-sub">
+                  <span className="text-success">53 رئيسية</span> • <span className="text-danger">18 طوارئ</span>
                 </div>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
-                <span className="text-slate-400">الامتحان المقالي القادم: <strong className="text-slate-200">Stage 3 Essay</strong></span>
-                <button 
-                  onClick={() => setActiveTab('curriculum')}
-                  className="text-sky-400 font-bold hover:underline flex items-center gap-1"
-                >
-                  متابعة المنهج ←
+              <div className="mini-stat-card" onClick={() => setActiveTab('curriculum')}>
+                <div className="mini-stat-header">
+                  <span className="mini-stat-title">📚 الدراسة</span>
+                  <span className="dot dot-purple"></span>
+                </div>
+                <div className="mini-stat-val">12 / 17</div>
+                <div className="mini-stat-sub">68% مكتمل</div>
+              </div>
+
+              <div className="mini-stat-card" onClick={() => setActiveTab('review')}>
+                <div className="mini-stat-header">
+                  <span className="mini-stat-title">🎯 هدف اليوم</span>
+                  <span className="dot dot-amber"></span>
+                </div>
+                <div className="mini-stat-val">23 كارت</div>
+                <div className="mini-stat-sub">2 موضوع • 1 مراجعة</div>
+              </div>
+            </div>
+
+            {/* QUICK TOOLS */}
+            <div className="section-block">
+              <h3 className="section-heading">أدوات سريعة</h3>
+              <div className="tools-grid">
+                <button className="tool-btn" onClick={() => setActiveTab('curriculum')}>
+                  <span className="tool-icon">📚</span>
+                  <span>تصفح المنهج</span>
+                </button>
+                <button className="tool-btn" onClick={() => setShowWizard(true)}>
+                  <span className="tool-icon">➕</span>
+                  <span>تسجيل عملية</span>
+                </button>
+                <button className="tool-btn" onClick={() => setShowMCQ(true)}>
+                  <span className="tool-icon">❓</span>
+                  <span>بنك الأسئلة</span>
+                </button>
+                <button className="tool-btn" onClick={() => setActiveTab('review')}>
+                  <span className="tool-icon">🧠</span>
+                  <span>المراجعة</span>
+                </button>
+                <button className="tool-btn" onClick={() => setActiveTab('analytics')}>
+                  <span className="tool-icon">📊</span>
+                  <span>الإحصائيات</span>
+                </button>
+                <button className="tool-btn" onClick={() => setActiveTab('logbook')}>
+                  <span className="tool-icon">🔪</span>
+                  <span>السجل اليومي</span>
                 </button>
               </div>
             </div>
 
-            {/* البطاقات الإحصائية الثلاث الصغيرة */}
-            <div className="grid grid-cols-3 gap-2.5">
-              <div 
-                onClick={() => setActiveTab('logbook')} 
-                className="bg-[#10172B] border border-slate-800 hover:border-sky-500/30 p-3 rounded-2xl cursor-pointer transition-all"
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[11px] font-bold text-slate-300">🔪 العمليات</span>
-                  <span className="w-2 h-2 rounded-full bg-sky-400"></span>
-                </div>
-                <div className="text-lg font-black text-white">71</div>
-                <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">
-                  <span className="text-emerald-400 font-bold">53</span> رئيسية • <span className="text-rose-400 font-bold">18</span> طوارئ
-                </div>
+            {/* LATEST ACTIVITY */}
+            <div className="section-block">
+              <div className="section-header-row">
+                <h3 className="section-heading">آخر نشاط</h3>
+                <span className="link-action" onClick={() => setActiveTab('logbook')}>عرض الكل</span>
               </div>
-
-              <div 
-                onClick={() => setActiveTab('curriculum')} 
-                className="bg-[#10172B] border border-slate-800 hover:border-indigo-500/30 p-3 rounded-2xl cursor-pointer transition-all"
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[11px] font-bold text-slate-300">📚 الدراسة</span>
-                  <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
-                </div>
-                <div className="text-lg font-black text-white">12 / 17</div>
-                <div className="text-[10px] text-indigo-300 mt-0.5 leading-tight font-medium">
-                  68% من المنهج
-                </div>
-              </div>
-
-              <div 
-                onClick={() => setActiveTab('review')} 
-                className="bg-[#10172B] border border-slate-800 hover:border-amber-500/30 p-3 rounded-2xl cursor-pointer transition-all"
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[11px] font-bold text-slate-300">🎯 هدف اليوم</span>
-                  <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                </div>
-                <div className="text-lg font-black text-amber-300">23 كارت</div>
-                <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">
-                  2 موضوع • 1 مراجعة
-                </div>
-              </div>
-            </div>
-
-            {/* أدوات سريعة */}
-            <div className="space-y-2.5">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">أدوات سريعة</h3>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { label: 'تصفح المنهج', icon: '📚', action: () => setActiveTab('curriculum') },
-                  { label: 'تسجيل عملية', icon: '➕', action: () => setShowWizard(true) },
-                  { label: 'بنك الأسئلة', icon: '❓', action: () => setShowMCQModal(true) },
-                  { label: 'الإحصائيات', icon: '📊', action: () => setActiveTab('analytics') },
-                  { label: 'المراجعة', icon: '🧠', action: () => setActiveTab('review') },
-                  { label: 'سجل العمليات', icon: '🔪', action: () => setActiveTab('logbook') },
-                ].map((tool, i) => (
-                  <button
-                    key={i}
-                    onClick={tool.action}
-                    className="h-16 bg-[#11182B]/80 hover:bg-[#15203A] border border-slate-800/80 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95"
-                  >
-                    <span className="text-lg">{tool.icon}</span>
-                    <span className="text-[11px] font-semibold text-slate-200">{tool.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* آخر نشاط (Timeline / Card List) */}
-            <div className="space-y-2.5 pt-1">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">آخر العمليات المدونة</h3>
-                <button onClick={() => setActiveTab('logbook')} className="text-xs text-sky-400 font-bold hover:underline">
-                  عرض السجل كامل
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                {operations.slice(0, 2).map((op) => (
-                  <div key={op.id} className="bg-[#10172B] border border-slate-800/90 rounded-2xl p-3.5 flex items-center justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-white">{op.name}</span>
-                        <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-mono">
-                          {op.specialty}
-                        </span>
+              <div className="timeline-list">
+                {operations.slice(0, 2).map(op => (
+                  <div key={op.id} className="timeline-card">
+                    <div className="timeline-content">
+                      <div className="timeline-top">
+                        <span className="timeline-title">{op.name}</span>
+                        <span className="tag-spec">{op.specialty}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                        <span className="text-emerald-400 font-medium">{op.role}</span>
+                      <div className="timeline-meta">
+                        <span className="text-success">{op.role}</span>
                         <span>•</span>
-                        <span className={op.urgency === 'Emergency' ? 'text-rose-400' : 'text-sky-400'}>
-                          {op.urgency}
-                        </span>
+                        <span className={op.urgency === 'Emergency' ? 'text-danger' : 'text-primary'}>{op.urgency}</span>
                         <span>•</span>
                         <span>{op.date}</span>
                       </div>
                     </div>
-                    <span className="text-xs font-bold px-2.5 py-1 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                      ✓ {op.outcome}
-                    </span>
+                    <span className="badge-outcome">✓ {op.outcome}</span>
                   </div>
                 ))}
               </div>
             </div>
+
           </div>
         )}
 
-        {/* ========================================================================= */}
-        {/* 3. TAB: OPERATIVE LOGBOOK                                                */}
-        {/* ========================================================================= */}
+        {/* 2. OPERATIVE LOGBOOK */}
         {activeTab === 'logbook' && (
-          <div className="space-y-4 animate-fadeIn">
-            {/* رأس الصفحة مع الإحصائيات */}
-            <div>
-              <h2 className="text-lg font-bold text-white">سجل العمليات الجراحية</h2>
-              <p className="text-xs text-slate-400">توثيق الحالات السريرية المعتمدة لاختبار البورد</p>
-            </div>
-
-            {/* شريط الإحصائيات العلوي */}
-            <div className="grid grid-cols-5 gap-1.5 bg-[#10172B] border border-slate-800 p-2.5 rounded-2xl text-center">
-              <div>
-                <span className="text-base font-extrabold text-white block">{operations.length}</span>
-                <span className="text-[9px] text-slate-400 block">الإجمالي</span>
+          <div className="tab-pane">
+            <h2 className="tab-title">سجل العمليات الجراحية</h2>
+            
+            {/* Top Stat Summary Bar */}
+            <div className="log-summary-bar">
+              <div className="log-stat-item">
+                <span className="log-stat-val">{operations.length}</span>
+                <span className="log-stat-lbl">الإجمالي</span>
               </div>
-              <div>
-                <span className="text-base font-extrabold text-emerald-400 block">
-                  {operations.filter(o => o.role === 'Surgeon').length}
-                </span>
-                <span className="text-[9px] text-slate-400 block">رئيسي</span>
+              <div className="log-stat-item">
+                <span className="log-stat-val text-success">53</span>
+                <span className="log-stat-lbl">رئيسية</span>
               </div>
-              <div>
-                <span className="text-base font-extrabold text-rose-400 block">
-                  {operations.filter(o => o.urgency === 'Emergency').length}
-                </span>
-                <span className="text-[9px] text-slate-400 block">طوارئ</span>
+              <div className="log-stat-item">
+                <span className="log-stat-val text-danger">18</span>
+                <span className="log-stat-lbl">طوارئ</span>
               </div>
-              <div>
-                <span className="text-base font-extrabold text-sky-400 block">95%</span>
-                <span className="text-[9px] text-slate-400 block">سلامة</span>
+              <div className="log-stat-item">
+                <span className="log-stat-val text-primary">72%</span>
+                <span className="log-stat-lbl">دون مضاعفات</span>
               </div>
-              <div>
-                <span className="text-base font-extrabold text-amber-400 block">
-                  {operations.filter(o => o.outcome === 'Complication').length}
-                </span>
-                <span className="text-[9px] text-slate-400 block">مضاعفات</span>
+              <div className="log-stat-item">
+                <span className="log-stat-val text-amber">5</span>
+                <span className="log-stat-lbl">مضاعفات</span>
               </div>
             </div>
 
             {/* Filter Chips */}
-            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
-              {['ALL', 'HPB', 'Colorectal', 'Upper GI', 'Breast', 'Trauma'].map((f) => (
+            <div className="filter-chips-row">
+              {['ALL', 'HPB', 'Colorectal', 'Upper GI', 'Breast', 'Trauma'].map(chip => (
                 <button
-                  key={f}
-                  onClick={() => setLogFilter(f)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-                    logFilter === f
-                      ? 'bg-sky-500 text-slate-950 shadow-md shadow-sky-500/20'
-                      : 'bg-[#10172B] border border-slate-800 text-slate-400 hover:text-white'
-                  }`}
+                  key={chip}
+                  onClick={() => setSelectedFilter(chip)}
+                  className={`filter-chip ${selectedFilter === chip ? 'active' : ''}`}
                 >
-                  {f === 'ALL' ? 'الكل' : f}
+                  {chip === 'ALL' ? 'الكل' : chip}
                 </button>
               ))}
             </div>
 
-            {/* Cards List */}
-            <div className="space-y-2.5">
-              {filteredOperations.map((op) => (
-                <div
-                  key={op.id}
-                  className="bg-[#10172B] border border-slate-800/80 hover:border-slate-700 rounded-2xl p-4 transition-all space-y-2"
-                >
-                  <div className="flex items-start justify-between">
+            {/* Case List */}
+            <div className="cases-list">
+              {filteredOps.map(op => (
+                <div key={op.id} className="case-card">
+                  <div className="case-card-header">
                     <div>
-                      <h4 className="text-sm font-bold text-white">{op.name}</h4>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        {op.specialty} • <span className="text-sky-400 font-semibold">{op.role}</span>
-                      </p>
+                      <h4 className="case-name">{op.name}</h4>
+                      <div className="case-subtitle">
+                        <span>{op.specialty}</span> • <span className="text-primary">{op.role}</span>
+                      </div>
                     </div>
-                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-lg border ${
-                      op.urgency === 'Emergency'
-                        ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                        : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                    }`}>
+                    <span className={`pill-urgency ${op.urgency === 'Emergency' ? 'urg-em' : 'urg-el'}`}>
                       {op.urgency}
                     </span>
                   </div>
-
-                  <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-800/60">
-                    <span className="text-slate-500 font-mono text-[11px]">{op.date}</span>
-                    <span className="text-emerald-400 font-medium">✓ {op.outcome}</span>
+                  <div className="case-card-footer">
+                    <span className="case-date">{op.date}</span>
+                    <span className="case-outcome">✓ {op.outcome}</span>
                   </div>
-
                   {op.pearl && (
-                    <div className="bg-[#0A0E1A] border border-slate-800 p-2.5 rounded-xl text-xs text-amber-200/90 leading-relaxed font-sans">
-                      <strong className="text-amber-400 font-bold block mb-0.5">💡 Surgical Pearl:</strong>
-                      {op.pearl}
+                    <div className="case-pearl">
+                      <strong>💡 Pearl:</strong> {op.pearl}
                     </div>
                   )}
                 </div>
@@ -421,58 +342,36 @@ export default function SurgicalSuite() {
           </div>
         )}
 
-        {/* ========================================================================= */}
-        {/* 4. TAB: BAILEY & LOVE CURRICULUM                                          */}
-        {/* ========================================================================= */}
+        {/* 3. CURRICULUM */}
         {activeTab === 'curriculum' && (
-          <div className="space-y-4 animate-fadeIn">
-            <div>
-              <h2 className="text-lg font-bold text-white">الخارطة الدراسية (Curriculum Roadmap)</h2>
-              <p className="text-xs text-slate-400">Year 2 — Bailey & Love 28th Edition</p>
+          <div className="tab-pane">
+            <h2 className="tab-title">الخارطة الدراسية (Bailey & Love 28th)</h2>
+            <div className="curriculum-overview">
+              <span>Year 2 Curriculum Progress</span>
+              <strong>68% (12 / 17 Topics)</strong>
             </div>
 
-            {/* كارت الحالة الإجمالية */}
-            <div className="bg-[#10172B] border border-slate-800 p-4 rounded-2xl flex items-center justify-between">
-              <div>
-                <span className="text-xs text-slate-400 font-medium">التقدم الإجمالي بالموضوعات</span>
-                <div className="text-xl font-black text-white mt-0.5">12 / 17 موضوع</div>
-              </div>
-              <span className="text-lg font-black text-sky-400 bg-sky-500/10 px-3 py-1.5 rounded-xl border border-sky-500/20">
-                68%
-              </span>
-            </div>
-
-            {/* Modules Cards */}
-            <div className="space-y-2.5">
-              {curriculumModules.map((module) => (
-                <div
-                  key={module.id}
-                  onClick={() => setSelectedTopic(module)}
-                  className="bg-[#10172B] border border-slate-800 hover:border-sky-500/40 p-4 rounded-2xl cursor-pointer transition-all active:scale-[0.99] space-y-3"
-                >
-                  <div className="flex items-center justify-between">
+            <div className="module-cards-col">
+              {[
+                { title: 'المبادئ العامة في الجراحة', en: 'General Surgical Principles', p: 100, done: 5, total: 5, c: '#10b981' },
+                { title: 'إصابات الحوادث والإنقاذ (ATLS)', en: 'Trauma & Damage Control', p: 60, done: 3, total: 5, c: '#0284c7' },
+                { title: 'الكبد، المرارة والبنكرياس', en: 'HPB & Biliary Surgery', p: 45, done: 2, total: 5, c: '#f59e0b' },
+                { title: 'القولون والمستقيم والشرج', en: 'Colorectal & Anorectal', p: 0, done: 0, total: 7, c: '#64748b' },
+              ].map((m, i) => (
+                <div key={i} className="module-card">
+                  <div className="module-header">
                     <div>
-                      <h4 className="text-sm font-bold text-white">{module.title}</h4>
-                      <p className="text-xs text-slate-400 font-mono mt-0.5">{module.enTitle}</p>
+                      <h4 className="module-title">{m.title}</h4>
+                      <span className="module-en">{m.en}</span>
                     </div>
-                    <span className="text-xs font-bold text-slate-300">
-                      {module.completed} / {module.total}
-                    </span>
+                    <span className="module-fraction">{m.done} / {m.total}</span>
                   </div>
-
-                  {/* Progress Bar */}
-                  <div className="w-full h-2 bg-slate-800/80 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full bg-gradient-to-r ${module.statusColor} transition-all duration-700`}
-                      style={{ width: `${module.progress}%` }}
-                    />
+                  <div className="module-bar-track">
+                    <div className="module-bar-fill" style={{ width: `${m.p}%`, backgroundColor: m.c }}></div>
                   </div>
-
-                  <div className="flex items-center justify-between text-[11px] text-slate-400">
-                    <span>نسبة الإنجاز: {module.progress}%</span>
-                    <span className="text-sky-400 font-semibold flex items-center gap-1">
-                      فتح التفاصيل ←
-                    </span>
+                  <div className="module-footer">
+                    <span>مكتمل: {m.p}%</span>
+                    <span className="text-primary font-bold">عرض الفصول ←</span>
                   </div>
                 </div>
               ))}
@@ -480,123 +379,75 @@ export default function SurgicalSuite() {
           </div>
         )}
 
-        {/* ========================================================================= */}
-        {/* 5. TAB: SMART REVIEW (SRS)                                                */}
-        {/* ========================================================================= */}
+        {/* 4. SMART REVIEW */}
         {activeTab === 'review' && (
-          <div className="space-y-4 animate-fadeIn">
-            <div>
-              <h2 className="text-lg font-bold text-white">المراجعة الذكية (Spaced Repetition)</h2>
-              <p className="text-xs text-slate-400">تثبيت المعلومات الجراحية طويلة المدى</p>
-            </div>
-
-            {/* بطاقة جلسة اليوم */}
-            <div className="bg-gradient-to-br from-[#121A30] to-[#0E1528] border border-indigo-500/20 p-5 rounded-3xl text-center space-y-4 shadow-xl">
-              <span className="inline-block text-xs font-bold bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full border border-indigo-500/30">
-                Today's Review Session
-              </span>
-              <div className="text-4xl font-black text-white tracking-tight">23 كارت</div>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                جاهزة للمراجعة المتباعدة بناءً على دقة استرجاعك السابقة للأدلة الجراحية.
-              </p>
-
-              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/80">
-                <div className="bg-[#0A0E1A] p-2.5 rounded-xl border border-slate-800">
-                  <span className="text-xs font-bold text-rose-400 block">5 متأخرة</span>
-                  <span className="text-[10px] text-slate-500">Overdue</span>
+          <div className="tab-pane">
+            <h2 className="tab-title">المراجعة الذكية (Spaced Repetition)</h2>
+            
+            <div className="srs-card">
+              <span className="srs-badge">Today's Review</span>
+              <div className="srs-count">23 Cards</div>
+              <p className="srs-desc">بطاقات مستحقة للمراجعة اليوم وفق جدول التكرار المتباعد.</p>
+              
+              <div className="srs-breakdown">
+                <div className="srs-stat-box text-danger">
+                  <strong>5</strong>
+                  <span>متأخرة</span>
                 </div>
-                <div className="bg-[#0A0E1A] p-2.5 rounded-xl border border-slate-800">
-                  <span className="text-xs font-bold text-amber-400 block">8 قيد التعلم</span>
-                  <span className="text-[10px] text-slate-500">Learning</span>
+                <div className="srs-stat-box text-amber">
+                  <strong>8</strong>
+                  <span>تحتاج مراجعة</span>
                 </div>
-                <div className="bg-[#0A0E1A] p-2.5 rounded-xl border border-slate-800">
-                  <span className="text-xs font-bold text-emerald-400 block">10 جديدة</span>
-                  <span className="text-[10px] text-slate-500">New Cards</span>
+                <div className="srs-stat-box text-success">
+                  <strong>10</strong>
+                  <span>جديدة</span>
                 </div>
               </div>
 
-              <button
-                onClick={() => setShowMCQModal(true)}
-                className="w-full h-12 bg-indigo-600 hover:bg-indigo-500 active:scale-98 text-white font-extrabold rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 transition-all text-sm cursor-pointer"
-              >
-                <span>▶</span>
-                <span>ابدأ المراجعة اليومية السريعة</span>
+              <button className="srs-start-btn" onClick={() => setShowMCQ(true)}>
+                ▶ ابدأ المراجعة الذكية
               </button>
             </div>
           </div>
         )}
 
-        {/* ========================================================================= */}
-        {/* 6. TAB: ANALYTICS                                                         */}
-        {/* ========================================================================= */}
+        {/* 5. ANALYTICS */}
         {activeTab === 'analytics' && (
-          <div className="space-y-4 animate-fadeIn">
-            <div>
-              <h2 className="text-lg font-bold text-white">التحليلات الجراحية (Surgical Analytics)</h2>
-              <p className="text-xs text-slate-400">تقييم الكفاءة وتوزيع التخصصات لملف الاعتماد</p>
-            </div>
+          <div className="tab-pane">
+            <h2 className="tab-title">الإحصائيات السريرية (Analytics)</h2>
 
-            {/* مؤشرات الأداء الأساسية */}
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="bg-[#10172B] border border-slate-800 p-3.5 rounded-2xl">
-                <span className="text-xs text-slate-400 block">إجمالي الإجراءات</span>
-                <span className="text-2xl font-black text-white mt-1 block">71</span>
-                <span className="text-[11px] text-emerald-400 font-semibold mt-1 block">+12 هذا الشهر</span>
+            <div className="stats-kpi-grid">
+              <div className="kpi-card">
+                <span className="kpi-lbl">إجمالي العمليات</span>
+                <span className="kpi-val">71</span>
+                <span className="text-success text-xs mt-1">تطور ممتاز</span>
               </div>
-              <div className="bg-[#10172B] border border-slate-800 p-3.5 rounded-2xl">
-                <span className="text-xs text-slate-400 block">معدل المضاعفات العام</span>
-                <span className="text-2xl font-black text-emerald-400 mt-1 block">4.2%</span>
-                <span className="text-[11px] text-slate-500 mt-1 block">ضمن النطاق العالمي الآمن</span>
+              <div className="kpi-card">
+                <span className="kpi-lbl">معدل المضاعفات</span>
+                <span className="kpi-val text-success">4.2%</span>
+                <span className="text-secondary text-xs mt-1">ضمن المعيار العالمي</span>
               </div>
             </div>
 
-            {/* Distribution by Specialty */}
-            <div className="bg-[#10172B] border border-slate-800 p-4 rounded-2xl space-y-3">
-              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                توزيع العمليات حسب التخصص (Specialty Distribution)
-              </h4>
-              <div className="space-y-2 text-xs">
+            <div className="analytics-card">
+              <h4 className="analytics-heading">Distribution by Specialty</h4>
+              <div className="bars-list">
                 {[
-                  { name: 'HPB & Biliary', count: 28, pct: 40, color: 'bg-sky-500' },
-                  { name: 'Trauma & Emergency', count: 18, pct: 25, color: 'bg-rose-500' },
-                  { name: 'Colorectal', count: 14, pct: 20, color: 'bg-indigo-500' },
-                  { name: 'Upper GI & Hernia', count: 11, pct: 15, color: 'bg-emerald-500' },
+                  { name: 'HPB', count: 28, pct: 40, col: '#0284c7' },
+                  { name: 'Trauma', count: 18, pct: 25, col: '#f43f5e' },
+                  { name: 'Colorectal', count: 14, pct: 20, col: '#818cf8' },
+                  { name: 'Upper GI', count: 11, pct: 15, col: '#10b981' }
                 ].map((item, idx) => (
-                  <div key={idx} className="space-y-1">
-                    <div className="flex justify-between text-[11px]">
-                      <span className="text-slate-300 font-medium">{item.name}</span>
-                      <span className="text-slate-400 font-mono">{item.count} حالة ({item.pct}%)</span>
+                  <div key={idx} className="bar-row">
+                    <div className="bar-row-info">
+                      <span>{item.name}</span>
+                      <span>{item.count} ({item.pct}%)</span>
                     </div>
-                    <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-                      <div className={`h-full ${item.color}`} style={{ width: `${item.pct}%` }} />
+                    <div className="bar-track">
+                      <div className="bar-fill" style={{ width: `${item.pct}%`, backgroundColor: item.col }}></div>
                     </div>
                   </div>
                 ))}
-              </div>
-            </div>
-
-            {/* توزيع الأدوار الجراحية */}
-            <div className="bg-[#10172B] border border-slate-800 p-4 rounded-2xl space-y-3">
-              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                الدور الجراحي (Role Distribution)
-              </h4>
-              <div className="grid grid-cols-4 gap-2 text-center">
-                <div className="p-2 bg-[#0A0E1A] rounded-xl border border-slate-800">
-                  <span className="text-sm font-bold text-emerald-400 block">53</span>
-                  <span className="text-[10px] text-slate-400 block mt-0.5">Surgeon</span>
-                </div>
-                <div className="p-2 bg-[#0A0E1A] rounded-xl border border-slate-800">
-                  <span className="text-sm font-bold text-sky-400 block">12</span>
-                  <span className="text-[10px] text-slate-400 block mt-0.5">1st Assist</span>
-                </div>
-                <div className="p-2 bg-[#0A0E1A] rounded-xl border border-slate-800">
-                  <span className="text-sm font-bold text-slate-300 block">4</span>
-                  <span className="text-[10px] text-slate-400 block mt-0.5">2nd Assist</span>
-                </div>
-                <div className="p-2 bg-[#0A0E1A] rounded-xl border border-slate-800">
-                  <span className="text-sm font-bold text-slate-400 block">2</span>
-                  <span className="text-[10px] text-slate-400 block mt-0.5">Observer</span>
-                </div>
               </div>
             </div>
           </div>
@@ -604,74 +455,59 @@ export default function SurgicalSuite() {
 
       </main>
 
-      {/* ========================================================================= */}
-      {/* 7. 3-STEP OPERATION WIZARD MODAL                                          */}
-      {/* ========================================================================= */}
+      {/* ======================= 3-STEP WIZARD MODAL ======================= */}
       {showWizard && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="w-full max-w-lg bg-[#0E1526] border border-slate-800 rounded-t-3xl sm:rounded-3xl p-5 space-y-4 shadow-2xl animate-slideUp">
-            
-            {/* مؤشر الخطوات العلوي */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <span className="w-7 h-7 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-400 flex items-center justify-center font-bold text-xs">
-                  {wizardStep}
-                </span>
-                <h3 className="font-bold text-sm text-white">
-                  {wizardStep === 1 && 'الخطوة 1: تحديد العملية والتخصص'}
+        <div className="wizard-overlay">
+          <div className="wizard-modal">
+            <div className="wizard-header">
+              <div className="wizard-step-indicator">
+                <span className="step-circle">{wizardStep}</span>
+                <span className="step-title">
+                  {wizardStep === 1 && 'الخطوة 1: اسم وتخصص العملية'}
                   {wizardStep === 2 && 'الخطوة 2: دورك ونوع الدخول'}
-                  {wizardStep === 3 && 'الخطوة 3: النتيجة والملاحظات المهمة'}
-                </h3>
+                  {wizardStep === 3 && 'الخطوة 3: النتيجة وملاحظات الـ Pearls'}
+                </span>
               </div>
-              <button
-                onClick={() => setShowWizard(false)}
-                className="text-slate-500 hover:text-white p-1"
-              >
-                ✕
-              </button>
+              <button className="close-btn" onClick={() => setShowWizard(false)}>✕</button>
             </div>
 
             {/* STEP 1 */}
             {wizardStep === 1 && (
-              <div className="space-y-4 animate-fadeIn">
-                <div>
-                  <label className="text-xs font-semibold text-slate-400 block mb-1.5">اسم العملية</label>
+              <div className="wizard-body">
+                <div className="form-group">
+                  <label className="field-label">اسم العملية (Procedure Title)</label>
                   <input
                     type="text"
+                    className="text-input"
                     placeholder="ابحث أو اكتب اسم العملية..."
                     value={opName}
                     onChange={(e) => setOpName(e.target.value)}
-                    className="w-full h-11 bg-[#0A0E1A] border border-slate-800 rounded-xl px-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-sky-500"
                   />
-                  
-                  {/* اقتراحات سريعة */}
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {quickProcedures.map((proc, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => setOpName(proc)}
-                        className="text-[11px] bg-slate-800/60 hover:bg-slate-800 text-slate-300 px-2.5 py-1 rounded-lg border border-slate-700/60"
-                      >
+                  <div className="autocomplete-chips">
+                    {[
+                      'Laparoscopic Appendectomy',
+                      'Laparoscopic Cholecystectomy',
+                      'Hernia Repair',
+                      'Thyroidectomy',
+                      'Whipple Procedure',
+                      'Right Hemicolectomy'
+                    ].map((proc, i) => (
+                      <span key={i} className="chip-auto" onClick={() => setOpName(proc)}>
                         {proc}
-                      </button>
+                      </span>
                     ))}
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-xs font-semibold text-slate-400 block mb-1.5">التخصص الفرعي</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['HPB', 'Colorectal', 'Breast', 'Upper GI', 'Trauma', 'Vascular'] as Operation['specialty'][]).map((spec) => (
+                <div className="form-group">
+                  <label className="field-label">التخصص (Specialty)</label>
+                  <div className="grid-selection-3">
+                    {(['HPB', 'Colorectal', 'Breast', 'Upper GI', 'Trauma', 'Vascular'] as Operation['specialty'][]).map(spec => (
                       <button
                         key={spec}
                         type="button"
                         onClick={() => setOpSpecialty(spec)}
-                        className={`h-10 text-xs font-bold rounded-xl border transition-all ${
-                          opSpecialty === spec
-                            ? 'bg-sky-500/20 text-sky-400 border-sky-500/40'
-                            : 'bg-[#0A0E1A] text-slate-400 border-slate-800'
-                        }`}
+                        className={`select-card ${opSpecialty === spec ? 'active' : ''}`}
                       >
                         {spec}
                       </button>
@@ -682,7 +518,7 @@ export default function SurgicalSuite() {
                 <button
                   disabled={!opName}
                   onClick={() => setWizardStep(2)}
-                  className="w-full h-12 bg-sky-500 disabled:opacity-40 text-slate-950 font-bold rounded-xl mt-2"
+                  className="btn-next"
                 >
                   التالي: دورك في العملية ←
                 </button>
@@ -691,368 +527,1093 @@ export default function SurgicalSuite() {
 
             {/* STEP 2 */}
             {wizardStep === 2 && (
-              <div className="space-y-4 animate-fadeIn">
-                <div>
-                  <label className="text-xs font-semibold text-slate-400 block mb-1.5">دورك في العملية</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {(['Surgeon', '1st Assistant', '2nd Assistant', 'Observer'] as Operation['role'][]).map((role) => (
+              <div className="wizard-body">
+                <div className="form-group">
+                  <label className="field-label">دورك في العملية (Surgical Role)</label>
+                  <div className="grid-selection-2">
+                    {(['Surgeon', '1st Assistant', '2nd Assistant', 'Observer'] as Operation['role'][]).map(r => (
                       <button
-                        key={role}
+                        key={r}
                         type="button"
-                        onClick={() => setOpRole(role)}
-                        className={`h-11 text-xs font-bold rounded-xl border transition-all ${
-                          opRole === role
-                            ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                            : 'bg-[#0A0E1A] text-slate-400 border-slate-800'
-                        }`}
+                        onClick={() => setOpRole(r)}
+                        className={`select-card ${opRole === r ? 'active' : ''}`}
                       >
-                        {role === 'Surgeon' ? '🔵 Surgeon (رئيسي)' : role}
+                        {r === 'Surgeon' ? '🔵 Surgeon (رئيسي)' : r}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-xs font-semibold text-slate-400 block mb-1.5">نوع الدخول</label>
-                  <div className="grid grid-cols-2 gap-2">
+                <div className="form-group">
+                  <label className="field-label">نوع الدخول (Admission Type)</label>
+                  <div className="grid-selection-2">
                     <button
                       type="button"
                       onClick={() => setOpUrgency('Emergency')}
-                      className={`h-11 text-xs font-bold rounded-xl border transition-all ${
-                        opUrgency === 'Emergency'
-                          ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
-                          : 'bg-[#0A0E1A] text-slate-400 border-slate-800'
-                      }`}
+                      className={`select-card ${opUrgency === 'Emergency' ? 'active-danger' : ''}`}
                     >
                       ⚡ Emergency (طوارئ)
                     </button>
                     <button
                       type="button"
                       onClick={() => setOpUrgency('Elective')}
-                      className={`h-11 text-xs font-bold rounded-xl border transition-all ${
-                        opUrgency === 'Elective'
-                          ? 'bg-blue-500/20 text-blue-400 border-blue-500/40'
-                          : 'bg-[#0A0E1A] text-slate-400 border-slate-800'
-                      }`}
+                      className={`select-card ${opUrgency === 'Elective' ? 'active-primary' : ''}`}
                     >
                       📅 Elective (مجدولة)
                     </button>
                   </div>
                 </div>
 
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setWizardStep(1)}
-                    className="w-1/3 h-12 bg-slate-800 text-slate-300 font-bold rounded-xl"
-                  >
-                    السابق
-                  </button>
-                  <button
-                    onClick={() => setWizardStep(3)}
-                    className="w-2/3 h-12 bg-sky-500 text-slate-950 font-bold rounded-xl"
-                  >
-                    التالي: النتيجة والملاحظات ←
-                  </button>
+                <div className="actions-two">
+                  <button className="btn-back" onClick={() => setWizardStep(1)}>السابق</button>
+                  <button className="btn-next" onClick={() => setWizardStep(3)}>التالي: النتيجة ←</button>
                 </div>
               </div>
             )}
 
             {/* STEP 3 */}
             {wizardStep === 3 && (
-              <div className="space-y-4 animate-fadeIn">
-                <div>
-                  <label className="text-xs font-semibold text-slate-400 block mb-1.5">نتيجة الإجراء والتعافي</label>
-                  <div className="grid grid-cols-3 gap-2">
+              <div className="wizard-body">
+                <div className="form-group">
+                  <label className="field-label">نتيجة العملية (Outcome)</label>
+                  <div className="grid-selection-3">
                     <button
                       type="button"
                       onClick={() => setOpOutcome('Uneventful')}
-                      className={`h-10 text-[11px] font-bold rounded-xl border ${
-                        opOutcome === 'Uneventful'
-                          ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                          : 'bg-[#0A0E1A] text-slate-400 border-slate-800'
-                      }`}
+                      className={`select-card ${opOutcome === 'Uneventful' ? 'active-success' : ''}`}
                     >
                       ✅ Uneventful
                     </button>
                     <button
                       type="button"
                       onClick={() => setOpOutcome('Complication')}
-                      className={`h-10 text-[11px] font-bold rounded-xl border ${
-                        opOutcome === 'Complication'
-                          ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
-                          : 'bg-[#0A0E1A] text-slate-400 border-slate-800'
-                      }`}
+                      className={`select-card ${opOutcome === 'Complication' ? 'active-warning' : ''}`}
                     >
                       ⚠️ Complication
                     </button>
                     <button
                       type="button"
                       onClick={() => setOpOutcome('Mortality')}
-                      className={`h-10 text-[11px] font-bold rounded-xl border ${
-                        opOutcome === 'Mortality'
-                          ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
-                          : 'bg-[#0A0E1A] text-slate-400 border-slate-800'
-                      }`}
+                      className={`select-card ${opOutcome === 'Mortality' ? 'active-danger' : ''}`}
                     >
                       ❌ Mortality
                     </button>
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-xs font-semibold text-slate-400 block mb-1.5">
-                    Pearls / أهم ما تعلمته من هذه العملية (اختياري)
-                  </label>
+                <div className="form-group">
+                  <label className="field-label">ما أهم شيء تعلمته؟ (Surgical Pearls)</label>
                   <textarea
                     rows={2}
+                    className="text-input"
+                    placeholder="نقطة تشريحية، صعوبة واجهتك..."
                     value={opPearl}
                     onChange={(e) => setOpPearl(e.target.value)}
-                    placeholder="نصيحة تقنية أو صعوبة تشريحية..."
-                    className="w-full bg-[#0A0E1A] border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-sky-500"
                   />
                 </div>
 
-                <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-900/50 p-2.5 rounded-xl border border-slate-800 cursor-pointer">
-                  <span>📷</span>
-                  <span>إضافة صورة للعملية (اختياري / Intra-op photo)</span>
+                <div className="photo-stub">
+                  📷 إضافة صورة للعملية (Intra-operative photo)
                 </div>
 
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setWizardStep(2)}
-                    className="w-1/3 h-12 bg-slate-800 text-slate-300 font-bold rounded-xl"
-                  >
-                    السابق
-                  </button>
-                  <button
-                    onClick={handleSaveOperation}
-                    className="w-2/3 h-12 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-black rounded-xl shadow-lg shadow-emerald-500/20"
-                  >
-                    💾 حفظ وتوثيق العملية
-                  </button>
+                <div className="actions-two">
+                  <button className="btn-back" onClick={() => setWizardStep(2)}>السابق</button>
+                  <button className="btn-save" onClick={handleSaveOperation}>💾 حفظ العملية</button>
                 </div>
               </div>
             )}
-
           </div>
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* 8. QUESTION BANK & MCQ MODAL                                              */}
-      {/* ========================================================================= */}
-      {showMCQModal && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-[#0E1526] border border-slate-800 rounded-3xl p-5 space-y-4 shadow-2xl animate-fadeIn">
-            
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <span className="text-xs font-bold text-sky-400">Question 04 / 25 • HPB Surgery</span>
-              <button onClick={() => { setShowMCQModal(false); setSelectedAnswer(null); setIsAnswerSubmitted(false); }} className="text-slate-400">
-                ✕
-              </button>
+      {/* ======================= MCQ MODAL ======================= */}
+      {showMCQ && (
+        <div className="wizard-overlay">
+          <div className="wizard-modal">
+            <div className="wizard-header">
+              <span className="text-primary font-bold text-xs">Question 04 / 25 • HPB Surgery</span>
+              <button className="close-btn" onClick={() => { setShowMCQ(false); setMcqAnswer(null); }}>✕</button>
             </div>
-
-            {/* Question Card */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-bold text-white leading-relaxed">
-                مريض يبلغ 45 عامًا خضع لاستئصال مرارة بالمنظار (Lap Chole)، في اليوم الثاني ظهر لديه ألم شرسوفي وحمى خفيفة مع ارتفاع البيليروبين. ما هو الإجراء التشخيصي الأول الأكثر حساسية لتحديد تسرب الصفراء؟
-              </h3>
-
-              {/* Options A - D */}
-              <div className="space-y-2 pt-2">
+            <div className="wizard-body">
+              <p className="mcq-question">
+                مريض عمره 45 سنة، خضع لاستئصال مرارة بالمنظار (Lap Chole)، وفي اليوم الثاني ظهرت آلام وحمى وارتفاع البيليروبين. ما هو الإجراء التشخيصي الأول الأكثر حساسية لتسرب الصفراء؟
+              </p>
+              
+              <div className="mcq-options">
                 {[
-                  { text: 'A) Ultrasound of the Abdomen', isCorrect: false },
-                  { text: 'B) MRCP (Magnetic Resonance Cholangiopancreatography)', isCorrect: true },
-                  { text: 'C) Immediate Exploratory Laparotomy', isCorrect: false },
-                  { text: 'D) Serum Amylase and Lipase only', isCorrect: false },
-                ].map((opt, i) => {
-                  let btnStyle = 'bg-[#0A0E1A] border-slate-800 text-slate-300';
-                  if (isAnswerSubmitted) {
-                    if (opt.isCorrect) btnStyle = 'bg-emerald-500/20 border-emerald-500 text-emerald-300 font-bold';
-                    else if (selectedAnswer === i) btnStyle = 'bg-rose-500/20 border-rose-500 text-rose-300';
-                  } else if (selectedAnswer === i) {
-                    btnStyle = 'border-sky-500 bg-sky-500/10 text-white';
-                  }
-
-                  return (
-                    <button
-                      key={i}
-                      disabled={isAnswerSubmitted}
-                      onClick={() => setSelectedAnswer(i)}
-                      className={`w-full p-3 text-right text-xs rounded-xl border transition-all ${btnStyle}`}
-                    >
-                      {opt.text}
-                    </button>
-                  );
-                })}
+                  'A) Ultrasound of the Abdomen',
+                  'B) MRCP (Magnetic Resonance Cholangiopancreatography)',
+                  'C) Immediate Exploratory Laparotomy',
+                  'D) Serum Amylase and Lipase only'
+                ].map((opt, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setMcqAnswer(i)}
+                    className={`mcq-opt-btn ${mcqAnswer === i ? (i === 1 ? 'opt-correct' : 'opt-wrong') : ''}`}
+                  >
+                    {opt}
+                  </button>
+                ))}
               </div>
 
-              {/* Explanation & Pearl */}
-              {isAnswerSubmitted && (
-                <div className="bg-[#0A0E1A] border border-slate-800 p-3.5 rounded-2xl space-y-2 animate-fadeIn text-xs leading-relaxed">
-                  <div className="font-bold text-emerald-400">
-                    {selectedAnswer === 1 ? '✓ إجابة صحيحة' : '✗ إجابة غير دقيقة'}
-                  </div>
-                  <p className="text-slate-300">
-                    <strong>Explanation:</strong> MRCP هو الفحص غير التداخلي المعياري (Gold Standard Non-invasive) لتقييم شجرة القنوات الصفراوية بدقة دون مخاطر ERCP.
-                  </p>
-                  <div className="bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-xl text-amber-300">
-                    <strong>Pearl 💡:</strong> في تسربات الصفراء، لا تتسرع بالفتح الجراحي؛ التدبير الأولي يكون بالموجات فوق الصوتية لتحديد التجمع، ثم تصريف عبر الجلد (PCD) مع ERCP ودعامة.
-                  </div>
+              {mcqAnswer !== null && (
+                <div className="mcq-expl">
+                  <strong className="text-success">✓ التفسير:</strong> MRCP هو المعيار الذهبي غير التداخلي لتشخيص تسربات القنوات الصفراوية بدقة عالية.
                 </div>
               )}
-
-              {/* Action Buttons */}
-              <div className="pt-2">
-                {!isAnswerSubmitted ? (
-                  <button
-                    disabled={selectedAnswer === null}
-                    onClick={() => setIsAnswerSubmitted(true)}
-                    className="w-full h-11 bg-sky-500 disabled:opacity-40 text-slate-950 font-bold rounded-xl"
-                  >
-                    تأكيد الإجابة
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => {
-                      setSelectedAnswer(null);
-                      setIsAnswerSubmitted(false);
-                    }}
-                    className="w-full h-11 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl"
-                  >
-                    السؤال التالي (Next Question 05) →
-                  </button>
-                )}
-              </div>
             </div>
-
           </div>
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* 9. TOPIC DETAILS DRAWER / MODAL                                           */}
-      {/* ========================================================================= */}
-      {selectedTopic && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="w-full max-w-lg bg-[#0E1526] border border-slate-800 rounded-t-3xl sm:rounded-3xl p-5 space-y-4 shadow-2xl animate-slideUp">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-              <div>
-                <h3 className="font-bold text-base text-white">{selectedTopic.title}</h3>
-                <span className="text-xs text-slate-400 font-mono">{selectedTopic.enTitle}</span>
-              </div>
-              <button onClick={() => setSelectedTopic(null)} className="text-slate-400">✕</button>
-            </div>
+      {/* ======================= BOTTOM NAVIGATION ======================= */}
+      <nav className="bottom-nav">
+        <button
+          onClick={() => setActiveTab('home')}
+          className={`nav-item ${activeTab === 'home' ? 'active' : ''}`}
+        >
+          <span className="nav-icon">🏠</span>
+          <span className="nav-label">الرئيسية</span>
+        </button>
 
-            <div className="grid grid-cols-2 gap-2.5">
-              {[
-                { title: '📖 قراءة الفصل', desc: 'Bailey & Love Chapter' },
-                { title: '🧠 Flashcards', desc: '42 بطاقة ذكية' },
-                { title: '❓ MCQs', desc: 'اختبار تجريبي (20 سؤال)' },
-                { title: '📝 My Notes', desc: 'ملاحظاتي السريرية' },
-                { title: '⭐ Surgical Pearls', desc: 'أهم 15 قاعدة جراحية' },
-                { title: '🔄 Review', desc: 'جلسة مراجعة متباعدة' },
-              ].map((item, i) => (
-                <div
-                  key={i}
-                  onClick={() => {
-                    if (item.title.includes('MCQ')) {
-                      setSelectedTopic(null);
-                      setShowMCQModal(true);
-                    }
-                  }}
-                  className="bg-[#0A0E1A] border border-slate-800 hover:border-sky-500/40 p-3 rounded-xl cursor-pointer transition-all"
-                >
-                  <span className="text-xs font-bold text-white block">{item.title}</span>
-                  <span className="text-[10px] text-slate-400 block mt-0.5">{item.desc}</span>
-                </div>
-              ))}
-            </div>
+        <button
+          onClick={() => setActiveTab('logbook')}
+          className={`nav-item ${activeTab === 'logbook' ? 'active' : ''}`}
+        >
+          <span className="nav-icon">🔪</span>
+          <span className="nav-label">العمليات</span>
+        </button>
 
-            <button
-              onClick={() => setSelectedTopic(null)}
-              className="w-full h-11 bg-slate-800 text-slate-300 font-bold rounded-xl text-xs"
-            >
-              إغلاق
-            </button>
-          </div>
+        {/* Central Floating Action Button */}
+        <div className="fab-container">
+          <button
+            onClick={() => setShowWizard(true)}
+            className="fab-button"
+            title="تسجيل عملية"
+          >
+            ➕
+          </button>
         </div>
-      )}
 
-      {/* ========================================================================= */}
-      {/* 10. BOTTOM NAVIGATION BAR + FLOATING ACTION BUTTON                        */}
-      {/* ========================================================================= */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#0A0E1A]/95 backdrop-blur-xl border-t border-slate-800/80 px-2 py-2">
-        <div className="max-w-md mx-auto flex items-center justify-between relative">
-          
-          {/* Tab 1: الرئيسية */}
-          <button
-            onClick={() => setActiveTab('home')}
-            className={`flex flex-col items-center gap-1 w-14 py-1 transition-all ${
-              activeTab === 'home' ? 'text-sky-400' : 'text-slate-400'
-            }`}
-          >
-            <span className="text-lg">🏠</span>
-            <span className="text-[10px] font-bold">الرئيسية</span>
-          </button>
+        <button
+          onClick={() => setActiveTab('curriculum')}
+          className={`nav-item ${activeTab === 'curriculum' ? 'active' : ''}`}
+        >
+          <span className="nav-icon">📚</span>
+          <span className="nav-label">المنهج</span>
+        </button>
 
-          {/* Tab 2: العمليات */}
-          <button
-            onClick={() => setActiveTab('logbook')}
-            className={`flex flex-col items-center gap-1 w-14 py-1 transition-all ${
-              activeTab === 'logbook' ? 'text-sky-400' : 'text-slate-400'
-            }`}
-          >
-            <span className="text-lg">🔪</span>
-            <span className="text-[10px] font-bold">العمليات</span>
-          </button>
-
-          {/* Central Floating Action Button (FAB) */}
-          <div className="relative -top-5">
-            <button
-              onClick={() => setShowWizard(true)}
-              className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white font-bold flex items-center justify-center text-2xl shadow-xl shadow-sky-500/30 hover:scale-105 active:scale-95 transition-all border-2 border-[#0A0E1A]"
-              title="تسجيل عملية جديدة"
-            >
-              ➕
-            </button>
-          </div>
-
-          {/* Tab 3: المنهج */}
-          <button
-            onClick={() => setActiveTab('curriculum')}
-            className={`flex flex-col items-center gap-1 w-14 py-1 transition-all ${
-              activeTab === 'curriculum' ? 'text-sky-400' : 'text-slate-400'
-            }`}
-          >
-            <span className="text-lg">📚</span>
-            <span className="text-[10px] font-bold">المنهج</span>
-          </button>
-
-          {/* Tab 4: المراجعة */}
-          <button
-            onClick={() => setActiveTab('review')}
-            className={`flex flex-col items-center gap-1 w-14 py-1 transition-all ${
-              activeTab === 'review' ? 'text-sky-400' : 'text-slate-400'
-            }`}
-          >
-            <span className="text-lg">🧠</span>
-            <span className="text-[10px] font-bold">المراجعة</span>
-          </button>
-
-          {/* Tab 5: الإحصائيات */}
-          <button
-            onClick={() => setActiveTab('analytics')}
-            className={`flex flex-col items-center gap-1 w-14 py-1 transition-all ${
-              activeTab === 'analytics' ? 'text-sky-400' : 'text-slate-400'
-            }`}
-          >
-            <span className="text-lg">📊</span>
-            <span className="text-[10px] font-bold">الأرقام</span>
-          </button>
-
-        </div>
+        <button
+          onClick={() => setActiveTab('review')}
+          className={`nav-item ${activeTab === 'review' ? 'active' : ''}`}
+        >
+          <span className="nav-icon">🧠</span>
+          <span className="nav-label">المراجعة</span>
+        </button>
       </nav>
+
+      {/* ======================= EMBEDDED STYLES ======================= */}
+      <style>{`
+        .surgery-app-root {
+          background-color: #0B0F19;
+          color: #F8FAFC;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+          min-height: 100vh;
+          padding-bottom: 90px;
+          box-sizing: border-box;
+          max-width: 680px;
+          margin: 0 auto;
+        }
+        .surgery-app-root * {
+          box-sizing: border-box;
+        }
+        .app-header {
+          position: sticky;
+          top: 0;
+          z-index: 20;
+          background: rgba(11, 15, 25, 0.9);
+          backdrop-filter: blur(12px);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 16px;
+          border-bottom: 1px solid #1E293B;
+        }
+        .user-info {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        .user-avatar {
+          width: 40px;
+          height: 40px;
+          border-radius: 12px;
+          background: linear-gradient(135deg, #0284c7, #4f46e5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 800;
+          font-size: 14px;
+          color: #fff;
+        }
+        .user-name {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 14px;
+          font-weight: 700;
+        }
+        .badge-resident {
+          font-size: 10px;
+          background: rgba(2, 132, 199, 0.15);
+          color: #38bdf8;
+          border: 1px solid rgba(2, 132, 199, 0.3);
+          padding: 2px 8px;
+          border-radius: 20px;
+        }
+        .user-subtitle {
+          font-size: 11px;
+          color: #94A3B8;
+          margin: 2px 0 0;
+        }
+        .streak-badge {
+          background: rgba(245, 158, 11, 0.12);
+          border: 1px solid rgba(245, 158, 11, 0.3);
+          color: #fbbf24;
+          padding: 5px 12px;
+          border-radius: 20px;
+          font-size: 12px;
+          font-weight: 700;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .app-main-content {
+          padding: 16px;
+        }
+        .tab-pane {
+          display: flex;
+          flex-direction: column;
+          gap: 18px;
+        }
+        .hero-progress-card {
+          background: linear-gradient(135deg, #131d36 0%, #0e1528 100%);
+          border: 1px solid rgba(2, 132, 199, 0.25);
+          border-radius: 24px;
+          padding: 20px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+        .hero-kicker {
+          font-size: 10px;
+          font-weight: 800;
+          color: #38bdf8;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .hero-title {
+          font-size: 17px;
+          font-weight: 800;
+          color: #fff;
+          margin: 4px 0 8px;
+        }
+        .hero-stats {
+          font-size: 12px;
+          color: #cbd5e1;
+        }
+        .ring-container {
+          position: relative;
+          width: 76px;
+          height: 76px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .progress-ring {
+          width: 100%;
+          height: 100%;
+          transform: rotate(-90deg);
+        }
+        .ring-bg {
+          color: #1e293b;
+        }
+        .ring-fill {
+          color: #38bdf8;
+          transition: stroke-dasharray 0.8s ease;
+        }
+        .ring-text {
+          position: absolute;
+          font-size: 14px;
+          font-weight: 800;
+          color: #fff;
+        }
+        .stats-row {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 10px;
+        }
+        .mini-stat-card {
+          background: #111827;
+          border: 1px solid #1E293B;
+          border-radius: 16px;
+          padding: 12px;
+          cursor: pointer;
+          transition: border-color 0.2s;
+        }
+        .mini-stat-card:hover {
+          border-color: rgba(2, 132, 199, 0.4);
+        }
+        .mini-stat-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 6px;
+        }
+        .mini-stat-title {
+          font-size: 11px;
+          font-weight: 700;
+          color: #cbd5e1;
+        }
+        .dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+        }
+        .dot-blue { background: #38bdf8; }
+        .dot-purple { background: #818cf8; }
+        .dot-amber { background: #f59e0b; }
+        .mini-stat-val {
+          font-size: 16px;
+          font-weight: 800;
+          color: #fff;
+        }
+        .mini-stat-sub {
+          font-size: 9px;
+          color: #94a3b8;
+          margin-top: 3px;
+        }
+        .text-success { color: #10b981; }
+        .text-danger { color: #f43f5e; }
+        .text-primary { color: #38bdf8; }
+        .text-amber { color: #f59e0b; }
+        .section-block {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .section-heading {
+          font-size: 11px;
+          font-weight: 800;
+          color: #94a3b8;
+          text-transform: uppercase;
+          margin: 0;
+        }
+        .section-header-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .link-action {
+          font-size: 11px;
+          color: #38bdf8;
+          font-weight: 700;
+          cursor: pointer;
+        }
+        .tools-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 8px;
+        }
+        .tool-btn {
+          background: #111827;
+          border: 1px solid #1e293b;
+          border-radius: 16px;
+          padding: 12px 8px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 4px;
+          color: #e2e8f0;
+          font-size: 11px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+        .tool-btn:hover {
+          background: #1e293b;
+        }
+        .tool-icon {
+          font-size: 18px;
+        }
+        .timeline-list {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .timeline-card {
+          background: #111827;
+          border: 1px solid #1e293b;
+          border-radius: 16px;
+          padding: 12px 14px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+        .timeline-top {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .timeline-title {
+          font-size: 13px;
+          font-weight: 700;
+          color: #fff;
+        }
+        .tag-spec {
+          font-size: 10px;
+          background: #1e293b;
+          color: #94a3b8;
+          padding: 2px 6px;
+          border-radius: 6px;
+        }
+        .timeline-meta {
+          font-size: 10px;
+          color: #94a3b8;
+          display: flex;
+          gap: 6px;
+          margin-top: 4px;
+        }
+        .badge-outcome {
+          font-size: 11px;
+          font-weight: 700;
+          background: rgba(16, 185, 129, 0.12);
+          color: #10b981;
+          border: 1px solid rgba(16, 185, 129, 0.25);
+          padding: 4px 8px;
+          border-radius: 8px;
+        }
+        .tab-title {
+          font-size: 16px;
+          font-weight: 800;
+          margin: 0;
+        }
+        .log-summary-bar {
+          display: grid;
+          grid-template-columns: repeat(5, 1fr);
+          background: #111827;
+          border: 1px solid #1e293b;
+          border-radius: 14px;
+          padding: 10px;
+          text-align: center;
+        }
+        .log-stat-val {
+          font-size: 15px;
+          font-weight: 800;
+          display: block;
+        }
+        .log-stat-lbl {
+          font-size: 9px;
+          color: #94a3b8;
+          display: block;
+          margin-top: 2px;
+        }
+        .filter-chips-row {
+          display: flex;
+          gap: 6px;
+          overflow-x: auto;
+          padding-bottom: 4px;
+        }
+        .filter-chip {
+          background: #111827;
+          border: 1px solid #1e293b;
+          color: #94a3b8;
+          font-size: 11px;
+          font-weight: 700;
+          padding: 6px 14px;
+          border-radius: 12px;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+        .filter-chip.active {
+          background: #0284c7;
+          color: #fff;
+          border-color: #0284c7;
+        }
+        .cases-list {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .case-card {
+          background: #111827;
+          border: 1px solid #1e293b;
+          border-radius: 16px;
+          padding: 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .case-card-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+        }
+        .case-name {
+          font-size: 14px;
+          font-weight: 700;
+          color: #fff;
+          margin: 0;
+        }
+        .case-subtitle {
+          font-size: 11px;
+          color: #94a3b8;
+          margin-top: 2px;
+        }
+        .pill-urgency {
+          font-size: 10px;
+          font-weight: 700;
+          padding: 3px 8px;
+          border-radius: 6px;
+        }
+        .urg-em {
+          background: rgba(244, 63, 94, 0.15);
+          color: #f43f5e;
+          border: 1px solid rgba(244, 63, 94, 0.3);
+        }
+        .urg-el {
+          background: rgba(2, 132, 199, 0.15);
+          color: #38bdf8;
+          border: 1px solid rgba(2, 132, 199, 0.3);
+        }
+        .case-card-footer {
+          display: flex;
+          justify-content: space-between;
+          font-size: 11px;
+          color: #94a3b8;
+          border-top: 1px solid #1e293b;
+          padding-top: 8px;
+        }
+        .case-outcome {
+          color: #10b981;
+          font-weight: 700;
+        }
+        .case-pearl {
+          background: #0b0f19;
+          border: 1px solid #1e293b;
+          border-radius: 10px;
+          padding: 8px 10px;
+          font-size: 11px;
+          color: #fde68a;
+          line-height: 1.4;
+        }
+        .curriculum-overview {
+          background: #111827;
+          border: 1px solid #1e293b;
+          border-radius: 14px;
+          padding: 14px;
+          display: flex;
+          justify-content: space-between;
+          font-size: 12px;
+          color: #cbd5e1;
+        }
+        .module-cards-col {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .module-card {
+          background: #111827;
+          border: 1px solid #1e293b;
+          border-radius: 16px;
+          padding: 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .module-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .module-title {
+          font-size: 13px;
+          font-weight: 700;
+          margin: 0;
+        }
+        .module-en {
+          font-size: 10px;
+          color: #94a3b8;
+          display: block;
+        }
+        .module-fraction {
+          font-size: 11px;
+          color: #94a3b8;
+        }
+        .module-bar-track {
+          width: 100%;
+          height: 6px;
+          background: #1e293b;
+          border-radius: 3px;
+          overflow: hidden;
+        }
+        .module-bar-fill {
+          height: 100%;
+          border-radius: 3px;
+        }
+        .module-footer {
+          display: flex;
+          justify-content: space-between;
+          font-size: 10px;
+          color: #94a3b8;
+        }
+        .srs-card {
+          background: #111827;
+          border: 1px solid #1e293b;
+          border-radius: 20px;
+          padding: 24px 16px;
+          text-align: center;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 12px;
+        }
+        .srs-badge {
+          background: rgba(129, 140, 248, 0.15);
+          color: #818cf8;
+          border: 1px solid rgba(129, 140, 248, 0.3);
+          font-size: 11px;
+          font-weight: 700;
+          padding: 4px 12px;
+          border-radius: 14px;
+        }
+        .srs-count {
+          font-size: 32px;
+          font-weight: 900;
+          color: #fff;
+        }
+        .srs-desc {
+          font-size: 12px;
+          color: #94a3b8;
+          margin: 0;
+        }
+        .srs-breakdown {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 8px;
+          width: 100%;
+          padding: 12px 0;
+          border-top: 1px solid #1e293b;
+        }
+        .srs-stat-box {
+          background: #0b0f19;
+          border: 1px solid #1e293b;
+          border-radius: 10px;
+          padding: 8px;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .srs-stat-box strong {
+          font-size: 14px;
+        }
+        .srs-stat-box span {
+          font-size: 9px;
+          color: #94a3b8;
+        }
+        .srs-start-btn {
+          width: 100%;
+          height: 46px;
+          background: #4f46e5;
+          color: #fff;
+          font-weight: 800;
+          border: none;
+          border-radius: 14px;
+          cursor: pointer;
+          font-size: 13px;
+        }
+        .stats-kpi-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+        }
+        .kpi-card {
+          background: #111827;
+          border: 1px solid #1e293b;
+          border-radius: 16px;
+          padding: 14px;
+          display: flex;
+          flex-direction: column;
+        }
+        .kpi-lbl {
+          font-size: 11px;
+          color: #94a3b8;
+        }
+        .kpi-val {
+          font-size: 22px;
+          font-weight: 900;
+          margin-top: 4px;
+        }
+        .analytics-card {
+          background: #111827;
+          border: 1px solid #1e293b;
+          border-radius: 16px;
+          padding: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .analytics-heading {
+          font-size: 12px;
+          font-weight: 800;
+          color: #cbd5e1;
+          margin: 0;
+        }
+        .bars-list {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .bar-row {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .bar-row-info {
+          display: flex;
+          justify-content: space-between;
+          font-size: 11px;
+          color: #94a3b8;
+        }
+        .bar-track {
+          width: 100%;
+          height: 6px;
+          background: #1e293b;
+          border-radius: 3px;
+          overflow: hidden;
+        }
+        .bar-fill {
+          height: 100%;
+          border-radius: 3px;
+        }
+        .wizard-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 50;
+          background: rgba(0,0,0,0.85);
+          backdrop-filter: blur(8px);
+          display: flex;
+          align-items: flex-end;
+          justify-content: center;
+        }
+        @media(min-width: 640px) {
+          .wizard-overlay {
+            align-items: center;
+            padding: 16px;
+          }
+        }
+        .wizard-modal {
+          background: #0e1526;
+          border: 1px solid #1e293b;
+          width: 100%;
+          max-width: 520px;
+          border-radius: 24px 24px 0 0;
+          padding: 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+        @media(min-width: 640px) {
+          .wizard-modal {
+            border-radius: 24px;
+          }
+        }
+        .wizard-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          border-bottom: 1px solid #1e293b;
+          padding-bottom: 12px;
+        }
+        .wizard-step-indicator {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .step-circle {
+          width: 26px;
+          height: 26px;
+          border-radius: 8px;
+          background: rgba(2, 132, 199, 0.2);
+          color: #38bdf8;
+          font-weight: 800;
+          font-size: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .step-title {
+          font-size: 13px;
+          font-weight: 700;
+          color: #fff;
+        }
+        .close-btn {
+          background: transparent;
+          border: none;
+          color: #94a3b8;
+          font-size: 16px;
+          cursor: pointer;
+        }
+        .wizard-body {
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+        }
+        .form-group {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .field-label {
+          font-size: 11px;
+          font-weight: 700;
+          color: #94a3b8;
+        }
+        .text-input {
+          background: #0b0f19;
+          border: 1px solid #1e293b;
+          border-radius: 12px;
+          height: 44px;
+          padding: 0 12px;
+          color: #fff;
+          font-size: 13px;
+          width: 100%;
+          font-family: inherit;
+        }
+        textarea.text-input {
+          height: auto;
+          padding: 10px 12px;
+        }
+        .autocomplete-chips {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 5px;
+          margin-top: 4px;
+        }
+        .chip-auto {
+          background: #111827;
+          border: 1px solid #1e293b;
+          color: #cbd5e1;
+          font-size: 10px;
+          padding: 3px 8px;
+          border-radius: 6px;
+          cursor: pointer;
+        }
+        .grid-selection-3 {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 6px;
+        }
+        .grid-selection-2 {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 6px;
+        }
+        .select-card {
+          background: #0b0f19;
+          border: 1px solid #1e293b;
+          color: #94a3b8;
+          font-size: 11px;
+          font-weight: 700;
+          padding: 10px 6px;
+          border-radius: 12px;
+          cursor: pointer;
+        }
+        .select-card.active {
+          background: rgba(2, 132, 199, 0.2);
+          border-color: #0284c7;
+          color: #38bdf8;
+        }
+        .select-card.active-primary {
+          background: rgba(2, 132, 199, 0.2);
+          border-color: #0284c7;
+          color: #38bdf8;
+        }
+        .select-card.active-danger {
+          background: rgba(244, 63, 94, 0.2);
+          border-color: #f43f5e;
+          color: #f43f5e;
+        }
+        .select-card.active-success {
+          background: rgba(16, 185, 129, 0.2);
+          border-color: #10b981;
+          color: #10b981;
+        }
+        .select-card.active-warning {
+          background: rgba(245, 158, 11, 0.2);
+          border-color: #f59e0b;
+          color: #f59e0b;
+        }
+        .actions-two {
+          display: flex;
+          gap: 8px;
+          margin-top: 6px;
+        }
+        .btn-back {
+          width: 35%;
+          height: 44px;
+          background: #1e293b;
+          color: #cbd5e1;
+          font-weight: 700;
+          border: none;
+          border-radius: 12px;
+          cursor: pointer;
+        }
+        .btn-next {
+          width: 100%;
+          height: 44px;
+          background: #0284c7;
+          color: #fff;
+          font-weight: 800;
+          border: none;
+          border-radius: 12px;
+          cursor: pointer;
+        }
+        .actions-two .btn-next {
+          width: 65%;
+        }
+        .btn-save {
+          width: 65%;
+          height: 44px;
+          background: linear-gradient(135deg, #10b981, #0d9488);
+          color: #fff;
+          font-weight: 800;
+          border: none;
+          border-radius: 12px;
+          cursor: pointer;
+        }
+        .photo-stub {
+          background: #0b0f19;
+          border: 1px dashed #1e293b;
+          padding: 8px;
+          border-radius: 10px;
+          font-size: 11px;
+          color: #94a3b8;
+          text-align: center;
+          cursor: pointer;
+        }
+        .toast-box {
+          position: fixed;
+          top: 16px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 60;
+          background: #10b981;
+          color: #0b0f19;
+          font-weight: 800;
+          font-size: 12px;
+          padding: 10px 18px;
+          border-radius: 20px;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+        }
+        .mcq-question {
+          font-size: 13px;
+          line-height: 1.5;
+          color: #fff;
+          margin: 0;
+        }
+        .mcq-options {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin-top: 6px;
+        }
+        .mcq-opt-btn {
+          background: #0b0f19;
+          border: 1px solid #1e293b;
+          color: #cbd5e1;
+          font-size: 12px;
+          padding: 10px;
+          border-radius: 10px;
+          text-align: right;
+          cursor: pointer;
+        }
+        .mcq-opt-btn.opt-correct {
+          background: rgba(16, 185, 129, 0.2);
+          border-color: #10b981;
+          color: #10b981;
+          font-weight: 700;
+        }
+        .mcq-opt-btn.opt-wrong {
+          background: rgba(244, 63, 94, 0.2);
+          border-color: #f43f5e;
+          color: #f43f5e;
+        }
+        .mcq-expl {
+          background: #0b0f19;
+          border: 1px solid #1e293b;
+          padding: 10px;
+          border-radius: 10px;
+          font-size: 11px;
+          color: #cbd5e1;
+          line-height: 1.4;
+        }
+        .bottom-nav {
+          position: fixed;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          background: rgba(11, 15, 25, 0.95);
+          backdrop-filter: blur(14px);
+          border-top: 1px solid #1e293b;
+          display: flex;
+          align-items: center;
+          justify-content: space-around;
+          padding: 6px 12px;
+          z-index: 40;
+          max-width: 680px;
+          margin: 0 auto;
+        }
+        .nav-item {
+          background: transparent;
+          border: none;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 2px;
+          color: #94a3b8;
+          cursor: pointer;
+        }
+        .nav-item.active {
+          color: #38bdf8;
+        }
+        .nav-icon {
+          font-size: 18px;
+        }
+        .nav-label {
+          font-size: 10px;
+          font-weight: 700;
+        }
+        .fab-container {
+          position: relative;
+          top: -14px;
+        }
+        .fab-button {
+          width: 50px;
+          height: 50px;
+          border-radius: 16px;
+          background: linear-gradient(135deg, #0284c7, #4f46e5);
+          border: 2px solid #0b0f19;
+          color: #fff;
+          font-size: 22px;
+          font-weight: 800;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 8px 20px rgba(2, 132, 199, 0.4);
+          cursor: pointer;
+        }
+      `}</style>
 
     </div>
   );
